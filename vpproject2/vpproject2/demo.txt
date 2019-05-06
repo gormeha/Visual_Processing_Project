@@ -1,0 +1,589 @@
+
+
+#include "pch.h"
+#include <iostream>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <iostream>
+#include<math.h>
+#include <fstream>
+using std::cerr;
+using std::endl;
+using std::ofstream;
+
+using namespace cv;
+using namespace std;
+#include <iostream>
+#include <vector>
+
+#include <stdio.h>
+#include <cstdlib>
+
+// OpenCV Includes
+#include <opencv2/core/core.hpp>        
+#include <opencv2/highgui/highgui.hpp>  
+#include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+
+using namespace std;
+using namespace cv;
+
+// Fundamental matrix
+cv::Mat F,m1,m2;
+// Points selected (left and right images)
+std::vector<cv::Point> points_l, points_r;
+
+cv::Mat image_left_dist, image_right_dist;
+cv::Mat image_left_undist, image_right_undist;
+// images with epipolar lines
+cv::Mat left_epipolar, right_epipolar;
+
+/**
+ * Draw an epipolar line on a corresponding image.
+ */
+void drawEpipolarLines(Mat output, Mat matToDraw, string windowName,int j,int k) {
+	for (int pos = 0; pos < output.rows; pos++) {
+		// ax + by + c = 0
+		float a = output.at<float>(pos, 0);
+		float b = output.at<float>(pos, 1);
+		float c = output.at<float>(pos, 2);
+
+		// set two points
+		double x = 0;
+		double y = -(a / b) * x - (c / b);
+		Point p1 = Point(x, y);
+		x = image_right_undist.cols;
+		y = -(a / b) * x - (c / b);
+		Point p2 = Point(x, y);
+		// draw epipolar line on the other image
+		line(matToDraw, p1, p2, Scalar(0, 255, 255));
+		putText(image_right_undist, "+", Point(j - 7, k + 5), CV_FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0, 255, 255));
+		rectangle(matToDraw,Point(j-7,k+7),Point(j+7,k-7),Scalar(255,255,255),1,8,0);
+		printf("\n matching  point on right Image (%d,%d)\n",j , k);
+		// display right_epipolar
+		imshow(windowName, matToDraw);
+	}
+}
+
+/**
+ * Handler for click on the left image.
+ */
+void mouseHandlerLeft(int event, int x, int y, int flags, void* param) {
+	switch (event) {
+	case CV_EVENT_LBUTTONDOWN:
+		int x1 = x;
+		int y1 = y;
+		cv::Point selected = cv::Point(x, y);
+		points_l.push_back(selected);
+		printf("\n\nSelected point on left Image (%d,%d)\n", selected.x, selected.y);
+		putText(image_left_undist, "+", Point(x1-7, y1+5), CV_FONT_HERSHEY_PLAIN, 1.0, CV_RGB(0, 255, 255));
+		// For every point in one of the two images of a stereo pair, the function finds the equation of the corresponding epipolar line in the other image.
+		cv::Mat output;
+		cv::computeCorrespondEpilines(points_l, 1, F, output);
+		rectangle(image_left_undist, Point(x1 - 7, y1 + 7), Point(x1 + 7, y1 - 7), Scalar(255, 255, 255), 1, 8, 0);
+		drawEpipolarLines(output, image_right_undist, "Right",x1,y1);
+		imshow("Left", image_left_undist);
+		break;
+	}
+}
+
+
+
+
+float *vec(int n, int m) {
+	/* create a vector starting at index n and ending at index m */
+	float *vec;
+
+	vec = (float *)malloc((m - n + 1) * sizeof(float));
+
+	vec -= n;
+	return(vec);
+}
+
+
+float **matrix(int n1, int n2, int m1, int m2) {
+	/* create a matrix, for example matrix (1, 3, 1, 4); */
+	float **mat;
+	int i;
+
+	mat = (float **)malloc((n2 - n1 + 1) * sizeof(float*));
+
+	mat -= n1;
+
+	for (i = n1; i <= n2; i++)
+	{
+		mat[i] = (float *)malloc((m2 - m1 + 1) * sizeof(float));
+		mat[i] -= m1;
+	}
+
+	return(mat);
+}
+
+
+static float at, bt, ct;
+#define PYTHAG(a,b) ((at=fabs(a)) > (bt=fabs(b)) ? \
+(ct=bt/at,at*sqrt(1.0+ct*ct)) : (bt ? (ct=at/bt,bt*sqrt(1.0+ct*ct)): 0.0))
+
+static float maxarg1, maxarg2;
+#define MAX(a,b) (maxarg1=(a),maxarg2=(b),(maxarg1) > (maxarg2) ?\
+	(maxarg1) : (maxarg2))
+#define SIGN(a,b) ((b) >= 0.0 ? fabs(a) : -fabs(a))
+
+void svdRoutine(float **A, int m, int n, float *w, float **v)
+
+{
+	int flag, i, its, j, jj, k, l, nm;
+	float c, f, h, s, x, y, z;
+	float anorm = 0.0, g = 0.0, scale = 0.0;
+	float *rv1;
+
+	if (m < n)
+		printf("SVDCMP: You must augment A with extra zero rows\n");
+	rv1 = vec(1, n);
+	for (i = 1; i <= n; i++) {
+		l = i + 1;
+		rv1[i] = scale * g;
+		g = s = scale = 0.0;
+		if (i <= m) {
+			for (k = i; k <= m; k++) scale += fabs(A[k][i]);
+			if (scale) {
+				for (k = i; k <= m; k++) {
+					A[k][i] /= scale;
+					s += A[k][i] * A[k][i];
+				}
+				f = A[i][i];
+				g = -SIGN(sqrt(s), f);
+				h = f * g - s;
+				A[i][i] = f - g;
+				if (i != n) {
+					for (j = l; j <= n; j++) {
+						for (s = 0.0, k = i; k <= m; k++) s += A[k][i] * A[k][j];
+						f = s / h;
+						for (k = i; k <= m; k++) A[k][j] += f * A[k][i];
+					}
+				}
+				for (k = i; k <= m; k++) A[k][i] *= scale;
+			}
+		}
+		w[i] = scale * g;
+		g = s = scale = 0.0;
+		if (i <= m && i != n) {
+			for (k = l; k <= n; k++) scale += fabs(A[i][k]);
+			if (scale) {
+				for (k = l; k <= n; k++) {
+					A[i][k] /= scale;
+					s += A[i][k] * A[i][k];
+				}
+				f = A[i][l];
+				g = -SIGN(sqrt(s), f);
+				h = f * g - s;
+				A[i][l] = f - g;
+				for (k = l; k <= n; k++) rv1[k] = A[i][k] / h;
+				if (i != m) {
+					for (j = l; j <= m; j++) {
+						for (s = 0.0, k = l; k <= n; k++) s += A[j][k] * A[i][k];
+						for (k = l; k <= n; k++) A[j][k] += s * rv1[k];
+					}
+				}
+				for (k = l; k <= n; k++) A[i][k] *= scale;
+			}
+		}
+		anorm = MAX(anorm, (fabs(w[i]) + fabs(rv1[i])));
+	}
+	for (i = n; i >= 1; i--) {
+		if (i < n) {
+			if (g) {
+				for (j = l; j <= n; j++)
+					v[j][i] = (A[i][j] / A[i][l]) / g;
+				for (j = l; j <= n; j++) {
+					for (s = 0.0, k = l; k <= n; k++) s += A[i][k] * v[k][j];
+					for (k = l; k <= n; k++) v[k][j] += s * v[k][i];
+				}
+			}
+			for (j = l; j <= n; j++) v[i][j] = v[j][i] = 0.0;
+		}
+		v[i][i] = 1.0;
+		g = rv1[i];
+		l = i;
+	}
+	for (i = n; i >= 1; i--) {
+		l = i + 1;
+		g = w[i];
+		if (i < n)
+			for (j = l; j <= n; j++) A[i][j] = 0.0;
+		if (g) {
+			g = 1.0 / g;
+			if (i != n) {
+				for (j = l; j <= n; j++) {
+					for (s = 0.0, k = l; k <= m; k++) s += A[k][i] * A[k][j];
+					f = (s / A[i][i])*g;
+					for (k = i; k <= m; k++) A[k][j] += f * A[k][i];
+				}
+			}
+			for (j = i; j <= m; j++) A[j][i] *= g;
+		}
+		else {
+			for (j = i; j <= m; j++) A[j][i] = 0.0;
+		}
+		++A[i][i];
+	}
+	for (k = n; k >= 1; k--) {
+		for (its = 1; its <= 30; its++) {
+			flag = 1;
+			for (l = k; l >= 1; l--) {
+				nm = l - 1;
+				if (fabs(rv1[l]) + anorm == anorm) {
+					flag = 0;
+					break;
+				}
+				if (fabs(w[nm]) + anorm == anorm) break;
+			}
+			if (flag) {
+				c = 0.0;
+				s = 1.0;
+				for (i = l; i <= k; i++) {
+					f = s * rv1[i];
+					if (fabs(f) + anorm != anorm) {
+						g = w[i];
+						h = PYTHAG(f, g);
+						w[i] = h;
+						h = 1.0 / h;
+						c = g * h;
+						s = (-f * h);
+						for (j = 1; j <= m; j++) {
+							y = A[j][nm];
+							z = A[j][i];
+							A[j][nm] = y * c + z * s;
+							A[j][i] = z * c - y * s;
+						}
+					}
+				}
+			}
+			z = w[k];
+			if (l == k) {
+				if (z < 0.0) {
+					w[k] = -z;
+					for (j = 1; j <= n; j++) v[j][k] = (-v[j][k]);
+				}
+				break;
+			}
+			if (its == 30) printf("No convergence in 30 SVDCMP iterations\n");
+			x = w[l];
+			nm = k - 1;
+			y = w[nm];
+			g = rv1[nm];
+			h = rv1[k];
+			f = ((y - z)*(y + z) + (g - h)*(g + h)) / (2.0*h*y);
+			g = PYTHAG(f, 1.0);
+			f = ((x - z)*(x + z) + h * ((y / (f + SIGN(g, f))) - h)) / x;
+			c = s = 1.0;
+			for (j = l; j <= nm; j++) {
+				i = j + 1;
+				g = rv1[i];
+				y = w[i];
+				h = s * g;
+				g = c * g;
+				z = PYTHAG(f, h);
+				rv1[j] = z;
+				c = f / z;
+				s = h / z;
+				f = x * c + g * s;
+				g = g * c - x * s;
+				h = y * s;
+				y = y * c;
+				for (jj = 1; jj <= n; jj++) {
+					x = v[jj][j];
+					z = v[jj][i];
+					v[jj][j] = x * c + z * s;
+					v[jj][i] = z * c - x * s;
+				}
+				z = PYTHAG(f, h);
+				w[j] = z;
+				if (z) {
+					z = 1.0 / z;
+					c = f * z;
+					s = h * z;
+				}
+				f = (c*g) + (s*y);
+				x = (c*y) - (s*g);
+				for (jj = 1; jj <= m; jj++) {
+					y = A[jj][j];
+					z = A[jj][i];
+					A[jj][j] = y * c + z * s;
+					A[jj][i] = z * c - y * s;
+				}
+			}
+			rv1[l] = 0.0;
+			rv1[k] = f;
+			w[k] = x;
+		}
+	}
+}
+
+#undef SIGN
+#undef MAX
+#undef PYTHAG
+
+//Compute SAD
+float computeSAD(Point l_pt1, Point l_pt2, Point r_pt1, Point r_pt2, int _win_size)
+{
+	float _sad_1 = 0;
+	//float _sad_2 = 0;
+	//float b = image_left_undist.at<Vec3b>(l_center_x, l_center_y)[0];	
+	
+
+	//printf("SAD 1: \n");
+	for (int i = 0; i < 2 * _win_size + 1; i++)
+	{
+		for (int j = 0; j < 2 * _win_size + 1; j++)
+		{
+			int dif_pixel = abs(image_left_undist.at<Vec3b>(l_pt1.y + i, l_pt1.x + j)[0] - image_right_undist.at<Vec3b>(r_pt1.y + i, r_pt1.x + j)[0]);
+			//printf("(%d,%d): %d - %d = %d\n",i, j, image_left_undist.at<Vec3b>(l_pt1.y + i, l_pt1.x + j)[0], image_right_undist.at<Vec3b>(r_pt1.y + i, r_pt1.x + j)[0], dif_pixel);
+			_sad_1 += dif_pixel;
+		}
+	}
+	//printf("SAD 1: %f\n", _sad_1);
+
+	
+
+	return _sad_1;
+}
+
+void Mfun(int event,int x,int y,int flag,void*) {
+	ofstream outdata;
+	
+	if (event == EVENT_LBUTTONDBLCLK)
+	{
+		int xx = x;
+		int yy = y;
+		//cout << xx << " " << y << endl;
+		outdata.open("2DR.txt", ofstream::app);
+		outdata << xx << " " << yy << endl;
+		
+			
+		
+		
+	}
+	
+}
+
+
+int main(int argc, char** argv)
+{
+
+	int no_of_points = 8;
+	float **P2D = matrix(1, no_of_points, 1, 2);
+	float **P3D = matrix(1, no_of_points, 1, 3); // constructing matrix A
+	float **a = matrix(1, no_of_points * 2, 1, 12);
+	string STRING;
+
+
+	/*.... Task-1:reading input from text files ....*/
+	string line;
+	ifstream myfile1("2DR.txt");
+	ifstream myfile2("3D.txt");
+	ifstream M1("M1.txt");
+	ifstream M2("M2.txt");
+
+	if (myfile1.is_open())
+	{
+
+		while (getline(myfile1, line))
+		{
+			for (int i = 1; i <= no_of_points; i++)
+			{
+				for (int j = 1; j <= 2; j++)
+				{
+					myfile1 >> P2D[i][j];
+					//	cout << P2D[i][j];
+					//	cout << '\t';
+				}
+				//cout << '\n';
+			}
+		}
+
+		myfile1.close();
+	}
+
+	else cout << "Unable to open file";
+
+	if (myfile2.is_open())
+	{
+
+		while (getline(myfile2, line))
+		{
+			for (int i = 1; i <= no_of_points; i++)
+			{
+				for (int j = 1; j <= 3; j++)
+				{
+					myfile2 >> P3D[i][j];
+					//	cout << P3D[i][j];
+					//  cout << '\t';
+				}
+				//cout << '\n';
+			}
+
+		}
+
+		myfile2.close();
+	}
+
+	else cout << "Unable to open file";
+	/* .....end of Task-1......*/
+
+	/* .....Task-2:creating matrix a.......*/
+
+	for (int ii = 1; ii <= no_of_points; ii++)
+	{
+		//for the odd rows..
+		for (int k = 1; k <= 3; k++) // for col 1 to 3
+		{
+			a[2 * ii - 1][k] = (-1)*P3D[ii][k];
+		}
+		a[ii * 2 - 1][4] = -1; // for col 4
+		for (int k = 5; k <= 8; k++) { // for col 5 to 8
+			a[ii * 2 - 1][k] = 0;
+		}
+		for (int k = 9; k <= 11; k++) // for col 9 to 11
+		{
+			a[ii * 2 - 1][k] = P2D[ii][1] * P3D[ii][k - 8];
+		}
+		a[ii * 2 - 1][12] = P2D[ii][1]; // for col 12
+
+		// for the Even rows..
+		for (int k = 1; k <= 4; k++) // for col 1 to 4
+		{
+			a[ii * 2][k] = 0;
+		}
+		for (int k = 5; k <= 7; k++) { // for col 5 to 7
+			a[ii * 2][k] = -1 * P3D[ii][k - 4];
+		}
+		a[2 * ii][8] = -1; // for col 8
+		for (int k = 9; k <= 11; k++) // for col 9to 11
+		{
+			a[ii * 2][k] = P2D[ii][2] * P3D[ii][k - 8];
+		}
+		a[ii * 2][12] = P2D[ii][2]; // for col 12
+
+	}
+
+	
+	float *w = vec(1, 12);
+	float **v = matrix(1, 12, 1, 12);
+	svdRoutine(a, no_of_points * 2, 12, w, v);
+
+
+
+	float min = w[1];    //finding the row with minimum value
+	int r;
+	for (int i = 1; i <= 12; i++)
+	{
+
+		if (w[i] < min) {
+			r = i;
+		}
+	}
+
+
+
+	float **m = matrix(1, 3, 1, 4);  //creating matrix M
+
+	for (int i = 1; i <= 3; i++) {
+		for (int j = 1; j <= 4; j++) {
+			m[i][j] = v[4 * (i - 1) + j][r];
+
+		}
+	}
+
+	/*....End of Task-4....*/
+	/*....Start of Task-5:Print projection matrix m*/
+	cout << "\n\nmatrix m1 is as follows..\n";
+	if (M1.is_open())
+	{
+
+		while (!M1.eof()) // To get you all the lines.
+		{
+			m1 >> M1;
+			getline(M1, STRING); // Saves the line in STRING.
+			cout << STRING; 
+			cout << "\n";// Prints our STRING.
+		}
+
+		M1.close(); 
+	}
+	cout << "\n\nmatrix m2 is as follows..\n";
+
+	if (M2.is_open())
+	{
+
+		while (!M2.eof()) // To get you all the lines.
+		{
+			getline(M2, STRING); // Saves the line in STRING.
+			cout << STRING;
+			cout << "\n";// Prints our STRING.
+		}
+
+		M1.close();
+	}
+
+
+
+
+
+
+
+
+
+	
+	char filename_left[500], filename_right[500];
+
+	int imageToUse = atoi(argv[1]);
+
+	
+	std::vector<std::vector<cv::Point3f> > opts;
+	std::vector<std::vector<cv::Point2f> > ipts1, ipts2;
+
+	cv::Mat intrinsic_matrix_1;
+	cv::Mat distortion_coeffs_1;
+	cv::Mat intrinsic_matrix_2;
+	cv::Mat distortion_coeffs_2;
+
+
+	// read distortion parameters of the cameras
+	cv::FileStorage fs("abc.xml", cv::FileStorage::READ);
+	fs["distCoeffs_1"] >> distortion_coeffs_1;
+	fs["distCoeffs_2"] >> distortion_coeffs_2;
+	fs["cameraMatrix_1"] >> intrinsic_matrix_1;
+	fs["cameraMatrix_2"] >> intrinsic_matrix_2;
+	fs["fundamental"] >> F;
+
+	/**
+	 * select a stereo pair of
+	 images from the pool of calibration images
+	 */
+	sprintf_s(filename_left, "im1.jpg", imageToUse);
+	sprintf_s(filename_right, "im2.jpg", imageToUse);
+	image_left_dist = cv::imread(filename_left, CV_LOAD_IMAGE_COLOR);
+	image_right_dist = cv::imread(filename_right, CV_LOAD_IMAGE_COLOR);
+
+	/**
+	 * present the undistorted images (image with the lens
+	 distortion removed) using the function cvUndistort to compute the new images.
+	 */
+	cv::undistort(image_left_dist, image_left_undist, intrinsic_matrix_1, distortion_coeffs_1);
+	cv::undistort(image_right_dist, image_right_undist, intrinsic_matrix_2, distortion_coeffs_2);
+
+	cv::imshow("Left", image_left_undist);
+	cv::imshow("Right", image_right_undist);
+
+	// set mouse callbacks
+	cv::setMouseCallback("Left", mouseHandlerLeft);
+	
+
+	left_epipolar = image_left_undist;
+	right_epipolar = image_right_undist;
+
+	cv::waitKey(0);
+
+	return 0;
+}

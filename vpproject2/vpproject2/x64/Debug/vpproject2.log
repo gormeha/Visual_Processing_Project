@@ -1,0 +1,26 @@
+﻿  vpproject2.cpp
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(146): warning C4244: 'argument': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(149): warning C4244: 'argument': conversion from 'double' to '_Tp', possible loss of data
+          with
+          [
+              _Tp=int
+          ]
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(236): warning C4005: 'MAX': macro redefinition
+  c:\users\mehag\downloads\opencv\build\include\opencv2\core\cvdef.h(315): note: see previous definition of 'MAX'
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(322): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(355): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(357): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(383): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(384): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(393): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(407): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(410): warning C4244: '=': conversion from 'double' to 'float', possible loss of data
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(670): warning C4474: 'sprintf_s' : too many arguments passed for format string
+  c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(670): note: placeholders and their parameters expect 0 variadic arguments, but 1 were provided
+c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(671): warning C4474: 'sprintf_s' : too many arguments passed for format string
+  c:\users\mehag\source\repos\vpproject2\vpproject2\vpproject2.cpp(671): note: placeholders and their parameters expect 0 variadic arguments, but 1 were provided
+  vpproject2.vcxproj -> C:\Users\mehag\source\repos\VPproject2\x64\Debug\vpproject2.exe
